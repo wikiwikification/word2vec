@@ -37,7 +37,7 @@ struct vocab_word {
 char train_file[MAX_STRING], output_file[MAX_STRING];
 char save_vocab_file[MAX_STRING], read_vocab_file[MAX_STRING];
 struct vocab_word *vocab;
-int binary = 0, cbow = 1, debug_mode = 2, window = 5, min_count = 5, num_threads = 12, min_reduce = 1;
+int cbow = 1, debug_mode = 2, window = 5, min_count = 5, num_threads = 12, min_reduce = 1;
 int *vocab_hash;
 long long vocab_max_size = 1000, vocab_size = 0, layer1_size = 100;
 long long train_words = 0, word_count_actual = 0, iter = 5, file_size = 0, classes = 0;
@@ -556,7 +556,12 @@ void *TrainModelThread(void *id) {
 
 void TrainModel() {
   long a, b, c, d;
-  FILE *fo;
+  FILE *text_fo, *binary_fo;
+  char text_output_file[MAX_STRING + 10], binary_output_file[MAX_STRING + 10];
+  strcpy(text_output_file, output_file);
+  strcat(text_output_file, ".txt");
+  strcpy(binary_output_file, output_file);
+  strcat(binary_output_file, ".bin");
   pthread_t *pt = (pthread_t *)malloc(num_threads * sizeof(pthread_t));
   printf("Starting training using file %s\n", train_file);
   starting_alpha = alpha;
@@ -568,15 +573,21 @@ void TrainModel() {
   start = clock();
   for (a = 0; a < num_threads; a++) pthread_create(&pt[a], NULL, TrainModelThread, (void *)a);
   for (a = 0; a < num_threads; a++) pthread_join(pt[a], NULL);
-  fo = fopen(output_file, "wb");
+  text_fo = fopen(text_output_file, "wb");
+  binary_fo = fopen(binary_output_file, "wb");
   if (classes == 0) {
     // Save the word vectors
-    fprintf(fo, "%lld %lld\n", vocab_size, layer1_size);
+    fprintf(text_fo, "%lld %lld\n", vocab_size, layer1_size);
+    fprintf(binary_fo, "%lld %lld\n", vocab_size, layer1_size);
     for (a = 0; a < vocab_size; a++) {
-      fprintf(fo, "%s ", vocab[a].word);
-      if (binary) for (b = 0; b < layer1_size; b++) fwrite(&syn0[a * layer1_size + b], sizeof(real), 1, fo);
-      else for (b = 0; b < layer1_size; b++) fprintf(fo, "%lf ", syn0[a * layer1_size + b]);
-      fprintf(fo, "\n");
+      fprintf(text_fo, "%s ", vocab[a].word);
+      fprintf(binary_fo, "%s ", vocab[a].word);
+      for (b = 0; b < layer1_size; b++) {
+        fprintf(text_fo, "%lf ", syn0[a * layer1_size + b]);
+        fwrite(&syn0[a * layer1_size + b], sizeof(real), 1, binary_fo);
+      }
+      fprintf(text_fo, "\n");
+      fprintf(binary_fo, "\n");
     }
   } else {
     // Run K-means on the word vectors
@@ -617,12 +628,16 @@ void TrainModel() {
       }
     }
     // Save the K-means classes
-    for (a = 0; a < vocab_size; a++) fprintf(fo, "%s %d\n", vocab[a].word, cl[a]);
+    for (a = 0; a < vocab_size; a++) {
+      fprintf(text_fo, "%s %d\n", vocab[a].word, cl[a]);
+      fprintf(binary_fo, "%s %d\n", vocab[a].word, cl[a]);
+    }
     free(centcn);
     free(cent);
     free(cl);
   }
-  fclose(fo);
+  fclose(text_fo);
+  fclose(binary_fo);
 }
 
 int ArgPos(char *str, int argc, char **argv) {
@@ -670,8 +685,6 @@ int main(int argc, char **argv) {
     printf("\t\tOutput word classes rather than word vectors; default number of classes is 0 (vectors are written)\n");
     printf("\t-debug <int>\n");
     printf("\t\tSet the debug mode (default = 2 = more info during training)\n");
-    printf("\t-binary <int>\n");
-    printf("\t\tSave the resulting vectors in binary moded; default is 0 (off)\n");
     printf("\t-save-vocab <file>\n");
     printf("\t\tThe vocabulary will be saved to <file>\n");
     printf("\t-read-vocab <file>\n");
@@ -679,7 +692,7 @@ int main(int argc, char **argv) {
     printf("\t-cbow <int>\n");
     printf("\t\tUse the continuous bag of words model; default is 1 (use 0 for skip-gram model)\n");
     printf("\nExamples:\n");
-    printf("./word2vec -train data.txt -output vec.txt -size 200 -window 5 -sample 1e-4 -negative 5 -hs 0 -binary 0 -cbow 1 -iter 3\n\n");
+    printf("./word2vec -train data.txt -output vec.txt -size 200 -window 5 -sample 1e-4 -negative 5 -hs 0 -cbow 1 -iter 3\n\n");
     return 0;
   }
   output_file[0] = 0;
@@ -690,7 +703,6 @@ int main(int argc, char **argv) {
   if ((i = ArgPos((char *)"-save-vocab", argc, argv)) > 0) strcpy(save_vocab_file, argv[i + 1]);
   if ((i = ArgPos((char *)"-read-vocab", argc, argv)) > 0) strcpy(read_vocab_file, argv[i + 1]);
   if ((i = ArgPos((char *)"-debug", argc, argv)) > 0) debug_mode = atoi(argv[i + 1]);
-  if ((i = ArgPos((char *)"-binary", argc, argv)) > 0) binary = atoi(argv[i + 1]);
   if ((i = ArgPos((char *)"-cbow", argc, argv)) > 0) cbow = atoi(argv[i + 1]);
   if (cbow) alpha = 0.05;
   if ((i = ArgPos((char *)"-alpha", argc, argv)) > 0) alpha = atof(argv[i + 1]);
