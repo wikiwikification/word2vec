@@ -582,8 +582,10 @@ void TrainModel() {
     for (a = 0; a < vocab_size; a++) {
       fprintf(text_fo, "%s ", vocab[a].word);
       fprintf(binary_fo, "%s ", vocab[a].word);
-      for (b = 0; b < layer1_size; b++) fprintf(text_fo, "%lf ", syn0[a * layer1_size + b]);
-      for (b = 0; b < layer1_size; b++) fwrite(&syn0[a * layer1_size + b], sizeof(real), 1, binary_fo);
+      for (b = 0; b < layer1_size; b++) {
+        fprintf(text_fo, "%lf ", syn0[a * layer1_size + b]);
+        fwrite(&syn0[a * layer1_size + b], sizeof(real), 1, binary_fo);
+      }
       fprintf(text_fo, "\n");
       fprintf(binary_fo, "\n");
     }
@@ -626,7 +628,10 @@ void TrainModel() {
       }
     }
     // Save the K-means classes
-    for (a = 0; a < vocab_size; a++) fprintf(fo, "%s %d\n", vocab[a].word, cl[a]);
+    for (a = 0; a < vocab_size; a++) {
+      fprintf(text_fo, "%s %d\n", vocab[a].word, cl[a]);
+      fprintf(binary_fo, "%s %d\n", vocab[a].word, cl[a]);
+    }
     free(centcn);
     free(cent);
     free(cl);
